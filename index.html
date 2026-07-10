@@ -132,8 +132,8 @@
                     <div><label class="block text-xs">Filtro Sigma Alt (ca):</label><input type="number" step="any" name="param_ca" value="3.00" class="w-full bg-gray-700 p-1 text-sm rounded"></div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 border-t border-gray-700 pt-4">
-                    <div class="sm:col-span-2"><h3 class="text-orange-400 font-bold text-sm">PARÁMETROS AVANZADOS</h3></div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 border-t border-gray-700 pt-4">
+                    <div class="sm:col-span-3"><h3 class="text-orange-400 font-bold text-sm">PARÁMETROS AVANZADOS</h3></div>
                     <div>
                         <label class="block text-xs" title="Permite capturar la deriva natural de reloj de dispositivos Android sin perder épocas.">Tolerancia de Sincronización (segundos):</label>
                         <input type="number" step="any" name="param_max_gap" value="0.50" class="w-full bg-gray-700 p-1 text-sm rounded">
@@ -141,6 +141,10 @@
                     <div>
                         <label class="block text-xs" title="Purga señales rebotadas (multipath). Valores < 25.0 introducen error de medición.">Máscara SNR (dBHz):</label>
                         <input type="number" step="any" name="param_snr" value="18.50" class="w-full bg-gray-700 p-1 text-sm rounded">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-purple-300 font-bold" title="Controla la profundidad de la cuadrícula. Valores > 10 exigen más tiempo de servidor Vercel.">Niveles de Refinamiento (Iteraciones):</label>
+                        <input type="number" step="1" min="1" max="30" name="param_iter" value="6" class="w-full bg-gray-700 p-1 text-sm rounded border border-purple-500 focus:outline-none focus:border-purple-300">
                     </div>
                 </div>
 
@@ -319,7 +323,6 @@
                     if (consoleId === 'console3') document.getElementById('btn-pdf-tab3').classList.remove('hidden');
                     if (consoleId === 'console4') document.getElementById('btn-pdf-tab4').classList.remove('hidden');
                     
-                    // CORRECCIÓN: Evaluación URL coincidente con ruta API mayúscula
                     if (url === '/API/tab3_calibrar') {
                         // Sincronizar coordenadas
                         document.querySelector('#form-tab4 input[name="utm_norte"]').value = document.querySelector('#form-tab3 input[name="utm_norte"]').value;
@@ -364,7 +367,6 @@
             let fullOutput = "";
 
             try {
-                // CORRECCIÓN: Enrutamiento Serverless blindado (API en mayúscula)
                 const response = await fetch('/API/tab2_efemerides', { method: 'POST' });
                 if (!response.body) throw new Error("No se recibió respuesta del servidor.");
                 
@@ -443,4 +445,3 @@
     </script>
 </body>
 </html>
-
