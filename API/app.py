@@ -29,6 +29,15 @@ C_LIGHT = 299792458.0
 OMEGA_E = 7.2921151467e-5
 MU = 3.986005e14
 
+# --- INYECCIÓN QUIRÚRGICA: FORMATEADOR DE ALTA PRECISIÓN DINÁMICA ---
+def f_14(val):
+    if val is None: return "0.0"
+    s = f"{val:.14f}"
+    if '.' in s:
+        s = s.rstrip('0')
+        if s.endswith('.'): s += '0'
+    return s
+
 def safe_f(val, default=0.0):
     try: return float(val) if val and str(val).strip() != '' else default
     except: return default
@@ -130,7 +139,6 @@ def parse_rinex_obs_completo(path):
                     if v: data['S5'] = float(v.replace('D', 'E').replace('d', 'e'))
                 
                 # --- INGENIERÍA DEFENSIVA: AUDITOR DE PSEUDODISTANCIA (DGPS) ---
-                # Dato mata relato: El motor DGPS usa C1/C5, no requiere ciclo de fase L1/L5.
                 valid_l1 = 'C1' in data and data['C1'] > 15000000.0
                 valid_l5 = 'C5' in data and data['C5'] > 15000000.0
                 
@@ -458,7 +466,6 @@ def aislar_diferencias_simples_ppk(obs_b, obs_r):
             if s == '_meta' or s not in obs_b[tow]: continue
             d_b = obs_b[tow]
             
-            # Lógica original: Priorizar L1, respaldar con L5, sin descartar épocas viables
             pr_b = d_b[s].get('C1') or d_b[s].get('C5')
             pr_r = d_r.get('C1') or d_r.get('C5')
             
@@ -639,7 +646,6 @@ def estadistica_desacoplada(coordenadas, conf_plani, conf_alti, err_hor_max, err
 
     med_N = get_median(N_list); med_E = get_median(E_list); med_Z = get_median(Z_list)
     
-    # 1. Aplicación del Filtro Fuerte excluyente (Hard Filter) 
     valid_coords = []
     for c in coordenadas:
         dh = math.hypot(c[0] - med_N, c[1] - med_E)
@@ -651,7 +657,6 @@ def estadistica_desacoplada(coordenadas, conf_plani, conf_alti, err_hor_max, err
 
     if not valid_coords: return None, None, None, 0, 0, 0, 0, 0.0
     
-    # 2. Análisis Estadístico Acoplado
     def calc_mean_std(arr):
         n = len(arr); m = sum(arr) / max(1, n)
         return m, (math.sqrt(sum((x - m)**2 for x in arr) / n) if n > 1 else 0.0)
@@ -675,7 +680,6 @@ def estadistica_desacoplada(coordenadas, conf_plani, conf_alti, err_hor_max, err
 
     fix_ratio = (len(f_v) / len(final_coords)) * 100 if final_coords else 0.0
     
-    # [IO ÓPTIMA] Mediana Geométrica para aislar el núcleo inercial y anular el sesgo de Multipath
     len_f = max(1, len(final_coords))
     med_N_f = get_median(N_f)
     med_E_f = get_median(E_f)
@@ -705,7 +709,6 @@ def generar_informe_homogeneizacion_detallado(base_name, rover_name, base_raw, r
     cs, es, s_ini, s_fin, tr_s, _ = get_stats(rover_sinc)
     t_exito = (es / er * 100) if er > 0 else 0.0
     
-    # Formateo crudo
     b_ini_str = f"{b_ini[3]:02d}:{b_ini[4]:02d}:{b_ini[5]}" if b_ini else "N/A"
     b_fin_str = f"{b_fin[3]:02d}:{b_fin[4]:02d}:{b_fin[5]}" if b_fin else "N/A"
     r_ini_str = f"{r_ini[3]:02d}:{r_ini[4]:02d}:{r_ini[5]}" if r_ini else "N/A"
@@ -725,7 +728,7 @@ def generar_informe_homogeneizacion_detallado(base_name, rover_name, base_raw, r
 
 [3] MATRIZ RESULTANTE (ESTRICTA, SIN INTERPOLACIÓN)
   [-] Épocas Útiles Sincronizadas: {es}
-  [-] Tasa de Éxito sobre Rover  : {t_exito:.14f}%
+  [-] Tasa de Éxito sobre Rover  : {f_14(t_exito)}%
 ========================================================================
 """
     return informe
@@ -733,9 +736,8 @@ def generar_informe_homogeneizacion_detallado(base_name, rover_name, base_raw, r
 def generar_informe_ascii(tipo, p_dict):
     estado_sol = 'FLOAT (DGPS)'
     
-    # Exposición total de la mantisa IEEE 754 blindada a 14 dígitos (Sin notación científica)
-    err_h_str = f"± {p_dict['err_h']:.14f} m (Vinculante)" if p_dict['err_h'] > 0 else 'Inactiva'
-    err_v_str = f"± {p_dict['err_v']:.14f} m (Vinculante)" if p_dict['err_v'] > 0 else 'Inactiva'
+    err_h_str = f"± {f_14(p_dict['err_h'])} m (Vinculante)" if p_dict['err_h'] > 0 else 'Inactiva'
+    err_v_str = f"± {f_14(p_dict['err_v'])} m (Vinculante)" if p_dict['err_v'] > 0 else 'Inactiva'
     
     informe = f"""
 ========================================================================
@@ -746,13 +748,13 @@ def generar_informe_ascii(tipo, p_dict):
 ------------------------------------------------------------------------
   [-] Tolerancia Horizontal  : {err_h_str}
   [-] Tolerancia Vertical    : {err_v_str}
-  [-] Máscara Elevación      : {p_dict['mask']:.14f}°
-  [-] Filtro Planimétrico    : {p_dict['cp']:.14f} Sigma
-  [-] Filtro Altimétrico     : {p_dict['ca']:.14f} Sigma
-  [-] Tolerancia Sync        : {p_dict.get('max_gap', 0.5):.14f} s
-  [-] Máscara SNR            : {p_dict.get('snr', 25.0):.14f} dBHz
+  [-] Máscara Elevación      : {f_14(p_dict['mask'])}°
+  [-] Filtro Planimétrico    : {f_14(p_dict['cp'])} Sigma
+  [-] Filtro Altimétrico     : {f_14(p_dict['ca'])} Sigma
+  [-] Tolerancia Sync        : {f_14(p_dict.get('max_gap', 0.5))} s
+  [-] Máscara SNR            : {f_14(p_dict.get('snr', 25.0))} dBHz
   [-] Épocas Útiles Retenidas: {p_dict['ret']} ({(p_dict['ret']/max(1, p_dict['total']))*100:.2f}% del total)
-  [-] Varianza Global Z      : {p_dict['ez']:.14f} m
+  [-] Varianza Global Z      : {f_14(p_dict['ez'])} m
 
 [1] TRAZABILIDAD DEL PROYECTO Y ARCHIVOS
 ------------------------------------------------------------------------
@@ -768,23 +770,24 @@ def generar_informe_ascii(tipo, p_dict):
 
 [3] CALIDAD GEOMÉTRICA (QA / QC)
 ------------------------------------------------------------------------
-  [-] Error Horizontal (RMS) : ± {math.hypot(p_dict['std_n'], p_dict['std_e']):.14f} m
-  [-] Error Espacial (3D RMS): ± {math.sqrt(p_dict['std_n']**2 + p_dict['std_e']**2 + p_dict['std_z']**2):.14f} m
+  [-] Error Horizontal (RMS) : ± {f_14(math.hypot(p_dict['std_n'], p_dict['std_e']))} m
+  [-] Error Espacial (3D RMS): ± {f_14(math.sqrt(p_dict['std_n']**2 + p_dict['std_e']**2 + p_dict['std_z']**2))} m
 
 [4] RESULTADOS VECTORIALES FINALES
 ------------------------------------------------------------------------
   * COORDENADA DE CONTROL (BASE FIJA):
-      Norte : {p_dict['b_n']:.14f} m
-      Este  : {p_dict['b_e']:.14f} m
-      Cota  : {p_dict['b_z']:.14f} m
+      Norte : {f_14(p_dict['b_n'])} m
+      Este  : {f_14(p_dict['b_e'])} m
+      Cota  : {f_14(p_dict['b_z'])} m
 
   * COORDENADA CALCULADA (AJUSTE IRLS DGPS {estado_sol}):
-      Norte : {p_dict['r_n_calc']:.14f} m
-      Este  : {p_dict['r_e_calc']:.14f} m
-      Cota  : {p_dict['r_z_calc']:.14f} m
+      Norte : {f_14(p_dict['r_n_calc'])} m
+      Este  : {f_14(p_dict['r_e_calc'])} m
+      Cota  : {f_14(p_dict['r_z_calc'])} m
 ========================================================================
 """
     return informe
+
 # =====================================================================
 # RUTAS FLASK (FLUJO ARQUITECTÓNICO CORREGIDO PARA VERCEL)
 # =====================================================================
@@ -882,6 +885,10 @@ def tab3_calibrar():
 
     p_max_gap = safe_f(request.form.get('param_max_gap'), 0.5)
     p_snr = safe_f(request.form.get('param_snr'), 25.0)
+    
+    # Captura dinámica de las iteraciones desde el frontend (Default 6 si falla)
+    p_iter = safe_i(request.form.get('param_iter'), 6)
+    p_iter = max(1, min(30, p_iter)) 
 
     def procesar():
         try:
@@ -946,9 +953,8 @@ def tab3_calibrar():
             best_eh = max(0.01, med_h + 3.0 * mad_h)
             best_ev = max(0.01, med_v + 3.0 * mad_v)
             
-            # Formateo sin notación científica para blindar captura frontend
-            yield f"  [*] Límite Horizontal Inyectado: {best_eh:.14f} m\n"
-            yield f"  [*] Límite Vertical Inyectado: {best_ev:.14f} m\n\n"
+            yield f"  [*] Límite Horizontal Inyectado: {f_14(best_eh)} m\n"
+            yield f"  [*] Límite Vertical Inyectado: {f_14(best_ev)} m\n\n"
             
             # =========================================================================
             # FASE 2: MALLA PENTADIMENSIONAL (M, Cp, Ca, SNR, Gap)
@@ -977,8 +983,9 @@ def tab3_calibrar():
             rover_tows_full = sorted(list(obs_r_full.keys()))
             base_tows_full = sorted(list(obs_b_full.keys()))
             
-            for nivel in range(6):
-                yield f"  [+] Refinando espacio de búsqueda (Zoom {nivel+1}/6)...\n"
+            # Integración de Control Táctico por Operador (Bucle Dinámico)
+            for nivel in range(p_iter):
+                yield f"  [+] Refinando espacio de búsqueda (Zoom {nivel+1}/{p_iter})...\n"
                 
                 m_grid = [max(1.0, min(25.0, x)) for x in [m_center - m_span, m_center, m_center + m_span]]
                 cp_grid = [max(0.1, min(5.0, x)) for x in [cp_center - cp_span, cp_center, cp_center + cp_span]]
@@ -1052,16 +1059,16 @@ def tab3_calibrar():
                 yield "\n========================================================\n"
                 yield "      [INFORME] PARÁMETROS ÓPTIMOS (CALIBRACIÓN OR 5D)\n"
                 yield "========================================================\n"
-                yield f"  [-] Tolerancia Sync (max_gap): {best_params['max_gap']:.14f}\n"
-                yield f"  [-] Máscara SNR (dBHz): {best_params['snr']:.14f}\n"
-                yield f"  [-] Máscara Elevación (°): {best_params['mask']:.14f}\n"
-                yield f"  [-] Filtro Sigma Plan (cp): {best_params['cp']:.14f}\n"
-                yield f"  [-] Filtro Sigma Alt (ca): {best_params['ca']:.14f}\n"
-                yield f"  [-] Error Permitido Horizontal (m): {best_params['eh']:.14f}\n"
-                yield f"  [-] Error Permitido Vertical (m): {best_params['ev']:.14f}\n"
+                yield f"  [-] Tolerancia Sync (max_gap): {f_14(best_params['max_gap'])}\n"
+                yield f"  [-] Máscara SNR (dBHz): {f_14(best_params['snr'])}\n"
+                yield f"  [-] Máscara Elevación (°): {f_14(best_params['mask'])}\n"
+                yield f"  [-] Filtro Sigma Plan (cp): {f_14(best_params['cp'])}\n"
+                yield f"  [-] Filtro Sigma Alt (ca): {f_14(best_params['ca'])}\n"
+                yield f"  [-] Error Permitido Horizontal (m): {f_14(best_params['eh'])}\n"
+                yield f"  [-] Error Permitido Vertical (m): {f_14(best_params['ev'])}\n"
                 yield "--------------------------------------------------------\n"
-                yield f"  [*] RMSE Global 3D al Punto: {best_params['rmse']:.14f} m\n"
-                yield f"  [*] Deltas Residuales -> N: {best_params['dn']:.14f}m, E: {best_params['de']:.14f}m, Z: {best_params['dz']:.14f}m\n"
+                yield f"  [*] RMSE Global 3D al Punto: {f_14(best_params['rmse'])} m\n"
+                yield f"  [*] Deltas Residuales -> N: {f_14(best_params['dn'])}m, E: {f_14(best_params['de'])}m, Z: {f_14(best_params['dz'])}m\n"
                 yield f"  [*] Épocas Retenidas: {best_params['ret']}\n"
                 yield "========================================================\n"
                 yield "\n[SUCCESS]"
@@ -1116,7 +1123,7 @@ def tab4_procesar():
             obs_r_raw = parse_rinex_obs_completo(p_r_nuevo) 
             nav = parse_rinex_nav_real(nav_path)
             
-            yield f"[PROGRESO] Emparejamiento Temporal Dinámico contra la Base Pivote (Tolerancia {p_max_gap:.4f}s)...\n"
+            yield f"[PROGRESO] Emparejamiento Temporal Dinámico contra la Base Pivote (Tolerancia {f_14(p_max_gap)}s)...\n"
             rover_tows = sorted(list(obs_r_raw.keys()))
             base_tows = sorted(list(obs_b_raw.keys()))
             obs_b_sync = {}
