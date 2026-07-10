@@ -129,9 +129,9 @@ def parse_rinex_obs_completo(path):
                     v = line[3+16*idx_s5 : 17+16*idx_s5].strip()
                     if v: data['S5'] = float(v.replace('D', 'E').replace('d', 'e'))
                 
-                # --- INGENIERÍA DEFENSIVA: AUDITOR DE FASE Y MONOFRECUENCIA ---
-                valid_l1 = 'C1' in data and data['C1'] > 15000000.0 and 'L1' in data and data['L1'] != 0.0
-                valid_l5 = 'C5' in data and data['C5'] > 15000000.0 and 'L5' in data and data['L5'] != 0.0
+                # --- INGENIERÍA DEFENSIVA: AUDITOR DE PSEUDODISTANCIA (DGPS) ---
+                valid_l1 = 'C1' in data and data['C1'] > 15000000.0
+                valid_l5 = 'C5' in data and data['C5'] > 15000000.0
                 
                 if valid_l1 or valid_l5:
                     if not valid_l1:
