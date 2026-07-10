@@ -130,6 +130,7 @@ def parse_rinex_obs_completo(path):
                     if v: data['S5'] = float(v.replace('D', 'E').replace('d', 'e'))
                 
                 # --- INGENIERÍA DEFENSIVA: AUDITOR DE PSEUDODISTANCIA (DGPS) ---
+                # Dato mata relato: El motor DGPS usa C1/C5, no requiere ciclo de fase L1/L5.
                 valid_l1 = 'C1' in data and data['C1'] > 15000000.0
                 valid_l5 = 'C5' in data and data['C5'] > 15000000.0
                 
@@ -724,7 +725,7 @@ def generar_informe_homogeneizacion_detallado(base_name, rover_name, base_raw, r
 
 [3] MATRIZ RESULTANTE (ESTRICTA, SIN INTERPOLACIÓN)
   [-] Épocas Útiles Sincronizadas: {es}
-  [-] Tasa de Éxito sobre Rover  : {repr(t_exito)}%
+  [-] Tasa de Éxito sobre Rover  : {t_exito:.14f}%
 ========================================================================
 """
     return informe
@@ -732,9 +733,9 @@ def generar_informe_homogeneizacion_detallado(base_name, rover_name, base_raw, r
 def generar_informe_ascii(tipo, p_dict):
     estado_sol = 'FLOAT (DGPS)'
     
-    # Exposición total de la mantisa IEEE 754 usando repr()
-    err_h_str = f"± {repr(p_dict['err_h'])} m (Vinculante)" if p_dict['err_h'] > 0 else 'Inactiva'
-    err_v_str = f"± {repr(p_dict['err_v'])} m (Vinculante)" if p_dict['err_v'] > 0 else 'Inactiva'
+    # Exposición total de la mantisa IEEE 754 blindada a 14 dígitos (Sin notación científica)
+    err_h_str = f"± {p_dict['err_h']:.14f} m (Vinculante)" if p_dict['err_h'] > 0 else 'Inactiva'
+    err_v_str = f"± {p_dict['err_v']:.14f} m (Vinculante)" if p_dict['err_v'] > 0 else 'Inactiva'
     
     informe = f"""
 ========================================================================
@@ -745,13 +746,13 @@ def generar_informe_ascii(tipo, p_dict):
 ------------------------------------------------------------------------
   [-] Tolerancia Horizontal  : {err_h_str}
   [-] Tolerancia Vertical    : {err_v_str}
-  [-] Máscara Elevación      : {repr(p_dict['mask'])}°
-  [-] Filtro Planimétrico    : {repr(p_dict['cp'])} Sigma
-  [-] Filtro Altimétrico     : {repr(p_dict['ca'])} Sigma
-  [-] Tolerancia Sync        : {repr(p_dict.get('max_gap', 0.5))} s
-  [-] Máscara SNR            : {repr(p_dict.get('snr', 25.0))} dBHz
-  [-] Épocas Útiles Retenidas: {p_dict['ret']} ({(p_dict['ret']/max(1, p_dict['total']))*100}% del total)
-  [-] Varianza Global Z      : {repr(p_dict['ez'])} m
+  [-] Máscara Elevación      : {p_dict['mask']:.14f}°
+  [-] Filtro Planimétrico    : {p_dict['cp']:.14f} Sigma
+  [-] Filtro Altimétrico     : {p_dict['ca']:.14f} Sigma
+  [-] Tolerancia Sync        : {p_dict.get('max_gap', 0.5):.14f} s
+  [-] Máscara SNR            : {p_dict.get('snr', 25.0):.14f} dBHz
+  [-] Épocas Útiles Retenidas: {p_dict['ret']} ({(p_dict['ret']/max(1, p_dict['total']))*100:.2f}% del total)
+  [-] Varianza Global Z      : {p_dict['ez']:.14f} m
 
 [1] TRAZABILIDAD DEL PROYECTO Y ARCHIVOS
 ------------------------------------------------------------------------
@@ -767,20 +768,20 @@ def generar_informe_ascii(tipo, p_dict):
 
 [3] CALIDAD GEOMÉTRICA (QA / QC)
 ------------------------------------------------------------------------
-  [-] Error Horizontal (RMS) : ± {repr(math.hypot(p_dict['std_n'], p_dict['std_e']))} m
-  [-] Error Espacial (3D RMS): ± {repr(math.sqrt(p_dict['std_n']**2 + p_dict['std_e']**2 + p_dict['std_z']**2))} m
+  [-] Error Horizontal (RMS) : ± {math.hypot(p_dict['std_n'], p_dict['std_e']):.14f} m
+  [-] Error Espacial (3D RMS): ± {math.sqrt(p_dict['std_n']**2 + p_dict['std_e']**2 + p_dict['std_z']**2):.14f} m
 
 [4] RESULTADOS VECTORIALES FINALES
 ------------------------------------------------------------------------
   * COORDENADA DE CONTROL (BASE FIJA):
-      Norte : {repr(p_dict['b_n'])} m
-      Este  : {repr(p_dict['b_e'])} m
-      Cota  : {repr(p_dict['b_z'])} m
+      Norte : {p_dict['b_n']:.14f} m
+      Este  : {p_dict['b_e']:.14f} m
+      Cota  : {p_dict['b_z']:.14f} m
 
   * COORDENADA CALCULADA (AJUSTE IRLS DGPS {estado_sol}):
-      Norte : {repr(p_dict['r_n_calc'])} m
-      Este  : {repr(p_dict['r_e_calc'])} m
-      Cota  : {repr(p_dict['r_z_calc'])} m
+      Norte : {p_dict['r_n_calc']:.14f} m
+      Este  : {p_dict['r_e_calc']:.14f} m
+      Cota  : {p_dict['r_z_calc']:.14f} m
 ========================================================================
 """
     return informe
@@ -789,12 +790,10 @@ def generar_informe_ascii(tipo, p_dict):
 # =====================================================================
 @app.route('/')
 def index():
-    # Vercel Serverless environment: api/app.py is executed, so root is one level up.
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     index_path = os.path.join(base_dir, 'index.html')
     return send_file(index_path)
 
-# CORRECCIÓN DE ENRUTAMIENTO: '/tab1_homogenizar' -> '/API/tab1_homogenizar'
 @app.route('/API/tab1_homogenizar', methods=['POST'])
 def tab1_homogenizar():
     with STATE_LOCK:
@@ -845,7 +844,6 @@ def tab1_homogenizar():
         except Exception as e: yield f"\n> [ERROR] Falla estructural: {str(e)}"
     return Response(procesar(), mimetype='text/plain')
 
-# CORRECCIÓN DE ENRUTAMIENTO: '/tab2_efemerides' -> '/API/tab2_efemerides'
 @app.route('/API/tab2_efemerides', methods=['POST'])
 def tab2_efemerides():
     def procesar():
@@ -867,7 +865,6 @@ def tab2_efemerides():
         except Exception as e: yield f"\n> [ERROR GENERAL] Excepción capturada: {str(e)}"
     return Response(procesar(), mimetype='text/plain')
 
-# CORRECCIÓN DE ENRUTAMIENTO: '/tab3_calibrar' -> '/API/tab3_calibrar'
 @app.route('/API/tab3_calibrar', methods=['POST'])
 def tab3_calibrar():
     utm_n = safe_f(request.form.get('utm_norte'), 0.0)
@@ -949,8 +946,9 @@ def tab3_calibrar():
             best_eh = max(0.01, med_h + 3.0 * mad_h)
             best_ev = max(0.01, med_v + 3.0 * mad_v)
             
-            yield f"  [*] Límite Horizontal Inyectado: {repr(best_eh)} m\n"
-            yield f"  [*] Límite Vertical Inyectado: {repr(best_ev)} m\n\n"
+            # Formateo sin notación científica para blindar captura frontend
+            yield f"  [*] Límite Horizontal Inyectado: {best_eh:.14f} m\n"
+            yield f"  [*] Límite Vertical Inyectado: {best_ev:.14f} m\n\n"
             
             # =========================================================================
             # FASE 2: MALLA PENTADIMENSIONAL (M, Cp, Ca, SNR, Gap)
@@ -1054,16 +1052,16 @@ def tab3_calibrar():
                 yield "\n========================================================\n"
                 yield "      [INFORME] PARÁMETROS ÓPTIMOS (CALIBRACIÓN OR 5D)\n"
                 yield "========================================================\n"
-                yield f"  [-] Tolerancia Sync (max_gap): {repr(best_params['max_gap'])}\n"
-                yield f"  [-] Máscara SNR (dBHz): {repr(best_params['snr'])}\n"
-                yield f"  [-] Máscara Elevación (°): {repr(best_params['mask'])}\n"
-                yield f"  [-] Filtro Sigma Plan (cp): {repr(best_params['cp'])}\n"
-                yield f"  [-] Filtro Sigma Alt (ca): {repr(best_params['ca'])}\n"
-                yield f"  [-] Error Permitido Horizontal (m): {repr(best_params['eh'])}\n"
-                yield f"  [-] Error Permitido Vertical (m): {repr(best_params['ev'])}\n"
+                yield f"  [-] Tolerancia Sync (max_gap): {best_params['max_gap']:.14f}\n"
+                yield f"  [-] Máscara SNR (dBHz): {best_params['snr']:.14f}\n"
+                yield f"  [-] Máscara Elevación (°): {best_params['mask']:.14f}\n"
+                yield f"  [-] Filtro Sigma Plan (cp): {best_params['cp']:.14f}\n"
+                yield f"  [-] Filtro Sigma Alt (ca): {best_params['ca']:.14f}\n"
+                yield f"  [-] Error Permitido Horizontal (m): {best_params['eh']:.14f}\n"
+                yield f"  [-] Error Permitido Vertical (m): {best_params['ev']:.14f}\n"
                 yield "--------------------------------------------------------\n"
-                yield f"  [*] RMSE Global 3D al Punto: {repr(best_params['rmse'])} m\n"
-                yield f"  [*] Deltas Residuales -> N: {repr(best_params['dn'])}m, E: {repr(best_params['de'])}m, Z: {repr(best_params['dz'])}m\n"
+                yield f"  [*] RMSE Global 3D al Punto: {best_params['rmse']:.14f} m\n"
+                yield f"  [*] Deltas Residuales -> N: {best_params['dn']:.14f}m, E: {best_params['de']:.14f}m, Z: {best_params['dz']:.14f}m\n"
                 yield f"  [*] Épocas Retenidas: {best_params['ret']}\n"
                 yield "========================================================\n"
                 yield "\n[SUCCESS]"
@@ -1072,7 +1070,6 @@ def tab3_calibrar():
         except Exception as e: yield f"\n> [ERROR FATAL] {str(e)}"
     return Response(procesar(), mimetype='text/plain')
 
-# CORRECCIÓN DE ENRUTAMIENTO: '/tab4_procesar' -> '/API/tab4_procesar'
 @app.route('/API/tab4_procesar', methods=['POST'])
 def tab4_procesar():
     utm_n = safe_f(request.form.get('utm_norte'), 0.0)
@@ -1119,7 +1116,7 @@ def tab4_procesar():
             obs_r_raw = parse_rinex_obs_completo(p_r_nuevo) 
             nav = parse_rinex_nav_real(nav_path)
             
-            yield f"[PROGRESO] Emparejamiento Temporal Dinámico contra la Base Pivote (Tolerancia {p_max_gap}s)...\n"
+            yield f"[PROGRESO] Emparejamiento Temporal Dinámico contra la Base Pivote (Tolerancia {p_max_gap:.4f}s)...\n"
             rover_tows = sorted(list(obs_r_raw.keys()))
             base_tows = sorted(list(obs_b_raw.keys()))
             obs_b_sync = {}
@@ -1187,3 +1184,4 @@ def tab4_procesar():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=7000, debug=True)
+
