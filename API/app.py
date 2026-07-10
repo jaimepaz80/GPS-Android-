@@ -152,14 +152,11 @@ def interpolar_base_a_rover(obs_base, tr, max_gap=0.05):
 
 def generar_rinex_sincronizado(raw_path, out_path, obs_dict):
     header_lines = []
-    constelaciones_presentes = set()
     with open(raw_path, 'r', encoding='utf-8', errors='ignore') as f:
         for line in f:
             if "SYS / # / OBS TYPES" in line:
-                if line[0].strip(): constelaciones_presentes.add(line[0])
-                header_lines.append(line)
-            else:
-                header_lines.append(line)
+                continue # LÓGICA DEPURADA: Destruye las cabeceras originales
+            header_lines.append(line)
             if "END OF HEADER" in line: break
     
     idx = next((i for i, l in enumerate(header_lines) if "END OF HEADER" in l), -1)
@@ -167,10 +164,10 @@ def generar_rinex_sincronizado(raw_path, out_path, obs_dict):
         constelaciones_requeridas = ['G', 'E', 'C', 'R', 'S', 'J']
         offset = 0
         for c in constelaciones_requeridas:
-            if c not in constelaciones_presentes:
-                header_lines.insert(idx + offset, f"{c}    4 C1 L1 C5 L5                                       SYS / # / OBS TYPES\n")
-                offset += 1
-        
+            # Inyecta la única verdad estructural: 4 observables fijos
+            header_lines.insert(idx + offset, f"{c}    4 C1 L1 C5 L5                                       SYS / # / OBS TYPES\n")
+            offset += 1
+            
     with open(out_path, 'w', encoding='utf-8') as f_out:
         for line in header_lines: f_out.write(line)
         for tow in sorted(obs_dict.keys()):
@@ -1190,4 +1187,3 @@ def tab4_procesar():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=7000, debug=True)
-
